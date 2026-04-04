@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Log in — AI Tutor</title>
+  <link rel="stylesheet" href="/static/css/theme.css" />
+</head>
+<body>
+  <nav class="nav">
+    <a href="/" class="brand">AI <span>Tutor</span></a>
+    <div class="nav-links">
+      <a href="/register">Sign up</a>
+      <a href="/">Home</a>
+    </div>
+  </nav>
+  <div class="container" style="padding-top:2rem">
+    <div class="card">
+      <h2>Log in</h2>
+      <form id="form">
+        <label for="email">Email</label>
+        <input id="email" type="email" autocomplete="username" required />
+        <label for="password">Password</label>
+        <input id="password" type="password" autocomplete="current-password" required />
+        <div id="err" class="form-error" style="display:none"></div>
+        <button type="submit" class="btn btn-primary" style="width:100%">Continue</button>
+      </form>
+      <p class="status" style="margin-top:1rem;text-align:center">
+        No account? <a href="/register">Sign up</a>
+      </p>
+    </div>
+  </div>
+  <script src="/static/js/auth.js"></script>
+  <script>
+    if (AITutorAuth.getToken()) window.location.href = "/dashboard";
+    document.getElementById("form").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var err = document.getElementById("err");
+      err.style.display = "none";
+      var email = document.getElementById("email").value.trim();
+      var password = document.getElementById("password").value;
+      try {
+        var res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email, password: password }),
+        });
+        var data = await res.json().catch(function () { return {}; });
+        if (!res.ok) {
+          err.textContent = AITutorAuth.formatApiError(data, res.statusText);
+          err.style.display = "block";
+          return;
+        }
+        AITutorAuth.setToken(data.access_token);
+        window.location.href = "/dashboard";
+      } catch (x) {
+        err.textContent = x.message || String(x);
+        err.style.display = "block";
+      }
+    });
+  </script>
+</body>
+</html>

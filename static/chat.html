@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tutor — AI Tutor</title>
+  <link rel="stylesheet" href="/static/css/theme.css" />
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <nav class="nav">
+    <a href="/" class="brand">AI <span>Tutor</span></a>
+    <div class="nav-links">
+      <a href="/dashboard">Dashboard</a>
+      <a href="/">Home</a>
+      <span class="user-email" id="who"></span>
+      <button type="button" class="link" id="newSess">New session</button>
+      <button type="button" class="link" id="logoutBtn">Log out</button>
+    </div>
+  </nav>
+  <div id="setupBanner" class="banner-warn" role="status"></div>
+  <div class="chat-wrap">
+    <div class="chat-shell">
+      <div id="log" class="chat-log" aria-live="polite"></div>
+      <div class="chat-compose">
+        <p class="chat-hint">Press <strong>Enter</strong> to send · <strong>Shift+Enter</strong> for a new line.</p>
+        <p id="attachLabel" class="attach-list-label" style="display:none">Attached (sent with your message):</p>
+        <div id="attachList" class="attach-list" aria-label="Attachments ready to send"></div>
+        <textarea id="text" placeholder="Type your question, ask for a quiz or summary, or add a file below…" rows="3"></textarea>
+        <div class="row">
+          <label class="file-btn">Image<input id="img" type="file" accept="image/*" /></label>
+          <label class="file-btn">PDF / txt<input id="doc" type="file" accept=".pdf,.txt" /></label>
+          <button type="button" class="btn" id="recBtn">Record voice</button>
+          <span class="status" id="recStat"></span>
+        </div>
+        <div class="row" style="justify-content:space-between;align-items:center">
+          <span class="status" id="sessHint">Your conversation is saved for this session.</span>
+          <button type="button" class="btn btn-primary" id="send">Send</button>
+        </div>
+        <div class="status err" id="err"></div>
+      </div>
+    </div>
+  </div>
+  <script src="/static/js/auth.js"></script>
+  <script>
+    mermaid.initialize({ startOnLoad: false, theme: "neutral" });
+    if (!AITutorAuth.requireAuth()) {}
+
+    var USE_STREAM = true;
+
+    document.getElementById("logoutBtn").addEventListener("click", function () {
+      AITutorAuth.logout();
+    });
+    document.getElementById("newSess").addEventListener("click", function () {
+      AITutorAuth.resetSession();
+      sessionId = AITutorAuth.sessionId();
+      document.getElementById("log").innerHTML = "";
+      document.getElementById("sessHint").textContent = "Started a fresh session.";
+    });
+
+    (async function loadMe() {
+      try {
+        var r = await fetch("/api/auth/me", { headers: AITutorAuth.authHeaders() });
+        if (r.status === 401) {
+          AITutorAuth.clear();
+          window.location.href = "/login";
+          return;
+        }
+        var u = await r.json();
+        document.getElementById("who").textContent = u.email || "";
+      } catch (e) {}
+    })();
+
+    (async function checkHealth() {
+      var b = document.getElementById("setupBanner");
+      try {
+        var r = await fetch("/api/health");
+        var h = await r.json();
+        if (!h.openai_configured || !h.openai_key_format_ok) {
+          b.classList.add("show");
+          b.innerHTML =
+            "<strong>Tutor needs configuration.</strong> Ask your administrator to add an OpenAI key on the server, or see the setup note on your dashboard.";
+        }
+      } catch (e) {
+        b.classList.add("show");
+        b.textContent = "Could not verify tutor configuration.";
+      }
+    })();
+
+    var logEl = document.getElementById("log");
+    var sessionId = AITutorAuth.sessionId();
+
+    function escapeHtml(s) {
+      return s.replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+      });
+    }
+
+    function pushMsg(role, html, extraClass) {
+      var wrap = document.createElement("div");
+      wrap.className = "msg " + (role === "user" ? "user" : "bot") + (extraClass ? " " + extraClass : "");
+      wrap.innerHTML =
+        '<div class="label">' + (role === "user" ? "You" : "Tutor") + '</div><div class="body"></div>';
+      wrap.querySelector(".body").innerHTML = html;
+      logEl.appendChild(wrap);
+      logEl.scrollTop = logEl.scrollHeight;
+      return wrap;
+    }
+
+    async function renderMermaidAfterReply(root, reply) {
+      var bodies = root.querySelectorAll(".msg.bot .body");
+      var last = bodies[bodies.length - 1];
+      if (!last || !reply) return;
+      var fence = reply.match(/```mermaid\s*([\s\S]*?)```/i);
+      var candidate = fence ? fence[1].trim() : "";
+      if (!candidate) return;
+      var id = "mmd-" + Math.random().toString(16).slice(2);
+      var holder = document.createElement("div");
+      holder.className = "diagram-wrap";
+      var graph = document.createElement("div");
+      graph.id = id;
+      graph.className = "mermaid";
+      graph.textContent = candidate;
+      holder.appendChild(graph);
+      last.appendChild(holder);
+      try {
+        await mermaid.run({ querySelector: "#" + id });
+      } catch (e) {
+        holder.textContent = "Diagram could not be drawn.";
+      }
+    }
+
+    async function readSSEStream(res) {
+      var reader = res.body.getReader();
+      var dec = new TextDecoder();
+      var buf = "";
+      var finalReply = "";
+      var sid = null;
+
+      function consumeBlock(block) {
+        var b = block.trim();
+        if (!b || b.indexOf("data: ") !== 0) return;
+        var j;
+        try {
+          j = JSON.parse(b.slice(6));
+        } catch (e) {
+          return;
+        }
+        if (j.type === "error") {
+          throw new Error(AITutorAuth.formatApiError(j, j.error || "Error"));
+        }
+        if (j.type === "final") {
+          finalReply = j.reply || "";
+          sid = j.session_id;
+        }
+      }
+
+      while (true) {
+        var step = await reader.read();
+        if (step.done) break;
+        buf += dec.decode(step.value, { stream: true });
+        var blocks = buf.split("\n\n");
+        buf = blocks.pop() || "";
+        for (var i = 0; i < blocks.length; i++) {
+          consumeBlock(blocks[i]);
+        }
+      }
+      buf += dec.decode();
+      if (buf.trim()) {
+        var tail = buf.split("\n\n");
+        for (var t = 0; t < tail.length; t++) {
+          consumeBlock(tail[t]);
+        }
+        if (!finalReply && buf.indexOf("data:") >= 0) {
+          consumeBlock(buf);
+        }
+      }
+      return { reply: finalReply, session_id: sid };
+    }
+
+    var sendBtn = document.getElementById("send");
+    var errEl = document.getElementById("err");
+    var textEl = document.getElementById("text");
+    var imgEl = document.getElementById("img");
+    var docEl = document.getElementById("doc");
+    var recBtn = document.getElementById("recBtn");
+    var recStat = document.getElementById("recStat");
+    var attachList = document.getElementById("attachList");
+    var mediaRecorder = null;
+    var audioChunks = [];
+
+    function renderAttachChips() {
+      attachList.innerHTML = "";
+      var lbl = document.getElementById("attachLabel");
+      function addChip(label, onClear) {
+        var chip = document.createElement("span");
+        chip.className = "attach-chip";
+        chip.innerHTML = '<span class="name"></span><button type="button" class="x" aria-label="Remove">×</button>';
+        chip.querySelector(".name").textContent = label;
+        chip.querySelector(".x").addEventListener("click", function (ev) {
+          ev.preventDefault();
+          onClear();
+        });
+        attachList.appendChild(chip);
+      }
+      if (imgEl.files && imgEl.files[0]) {
+        addChip("Image: " + imgEl.files[0].name, function () {
+          imgEl.value = "";
+          renderAttachChips();
+        });
+      }
+      if (docEl.files && docEl.files[0]) {
+        addChip("Document: " + docEl.files[0].name, function () {
+          docEl.value = "";
+          renderAttachChips();
+        });
+      }
+      if (window.__lastAudioBlob) {
+        addChip("Voice note (ready)", function () {
+          window.__lastAudioBlob = null;
+          recStat.textContent = "";
+          renderAttachChips();
+        });
+      }
+      if (lbl) {
+        lbl.style.display = attachList.children.length ? "block" : "none";
+      }
+    }
+
+    imgEl.addEventListener("change", renderAttachChips);
+    imgEl.addEventListener("input", renderAttachChips);
+    docEl.addEventListener("change", renderAttachChips);
+    docEl.addEventListener("input", renderAttachChips);
+
+    function clearComposeUi() {
+      textEl.value = "";
+      imgEl.value = "";
+      docEl.value = "";
+      window.__lastAudioBlob = null;
+      recStat.textContent = "";
+      var lbl = document.getElementById("attachLabel");
+      if (lbl) lbl.style.display = "none";
+      renderAttachChips();
+    }
+
+    function clearAfterSuccess() {
+      clearComposeUi();
+    }
+
+    async function sendMessage() {
+      if (window.__tutorSending) return;
+      var imgFile = imgEl.files && imgEl.files[0] ? imgEl.files[0] : null;
+      var docFile = docEl.files && docEl.files[0] ? docEl.files[0] : null;
+      var audioBlob = window.__lastAudioBlob || null;
+
+      errEl.textContent = "";
+      sendBtn.disabled = true;
+      var fd = new FormData();
+      fd.append("session_id", sessionId);
+      var t = textEl.value.trim();
+      if (t) fd.append("message", t);
+      if (imgFile) fd.append("image", imgFile, imgFile.name || "image");
+      if (docFile) fd.append("document", docFile, docFile.name || "document.pdf");
+      if (audioBlob) fd.append("audio", audioBlob, "voice.webm");
+
+      var preview = [];
+      if (t) preview.push(escapeHtml(t));
+      if (imgFile)
+        preview.push('<span class="attach-inline">Image: <strong>' + escapeHtml(imgFile.name || "image") + "</strong></span>");
+      if (docFile)
+        preview.push('<span class="attach-inline">Document: <strong>' + escapeHtml(docFile.name || "file") + "</strong></span>");
+      if (audioBlob) preview.push('<span class="attach-inline"><strong>Voice note</strong> attached</span>');
+      if (!preview.length) {
+        errEl.textContent = "Add a message, image, document, or voice note.";
+        sendBtn.disabled = false;
+        return;
+      }
+
+      var textBackup = textEl.value;
+      window.__tutorSending = true;
+      clearComposeUi();
+      pushMsg("user", preview.join("<br/>"));
+
+      var streamingWrap = null;
+      try {
+        var headers = Object.assign(
+          { Accept: USE_STREAM ? "text/event-stream" : "application/json" },
+          AITutorAuth.authHeaders()
+        );
+
+        if (USE_STREAM) {
+          streamingWrap = pushMsg("bot", '<span class="status">Thinking…</span>', "streaming");
+          var res = await fetch("/api/chat/stream", { method: "POST", headers: headers, body: fd });
+          if (res.status === 401) {
+            textEl.value = textBackup;
+            AITutorAuth.clear();
+            window.location.href = "/login";
+            return;
+          }
+          if (!res.ok) {
+            var ej = await res.json().catch(function () { return {}; });
+            throw new Error(AITutorAuth.formatApiError(ej, res.statusText));
+          }
+          streamingWrap.querySelector(".body").innerHTML = '<span class="status ok">Preparing your answer…</span>';
+          var out = await readSSEStream(res);
+          sessionId = out.session_id || sessionId;
+          localStorage.setItem("ai_tutor_session", sessionId);
+          streamingWrap.classList.remove("streaming");
+          streamingWrap.querySelector(".body").innerHTML = escapeHtml(out.reply || "").replace(/\n/g, "<br/>");
+          await renderMermaidAfterReply(logEl, out.reply || "");
+        } else {
+          var res2 = await fetch("/api/chat", { method: "POST", headers: headers, body: fd });
+          var data = await res2.json().catch(function () { return {}; });
+          if (res2.status === 401) {
+            textEl.value = textBackup;
+            AITutorAuth.clear();
+            window.location.href = "/login";
+            return;
+          }
+          if (!res2.ok) throw new Error(AITutorAuth.formatApiError(data, res2.statusText));
+          sessionId = data.session_id || sessionId;
+          localStorage.setItem("ai_tutor_session", sessionId);
+          var reply = data.reply || "";
+          pushMsg("bot", escapeHtml(reply).replace(/\n/g, "<br/>"));
+          await renderMermaidAfterReply(logEl, reply);
+        }
+
+        clearAfterSuccess();
+        document.getElementById("sessHint").textContent = "Message sent. Your chat continues in this session.";
+      } catch (e) {
+        textEl.value = textBackup;
+        if (streamingWrap && streamingWrap.parentNode) streamingWrap.remove();
+        errEl.textContent = String(e.message || e);
+      } finally {
+        window.__tutorSending = false;
+        sendBtn.disabled = false;
+      }
+    }
+
+    sendBtn.addEventListener("click", function () {
+      sendMessage();
+    });
+
+    textEl.addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
+      e.preventDefault();
+      sendMessage();
+    });
+
+    recBtn.addEventListener("click", async function () {
+      errEl.textContent = "";
+      if (!mediaRecorder || mediaRecorder.state === "inactive") {
+        try {
+          var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          audioChunks = [];
+          mediaRecorder = new MediaRecorder(stream);
+          mediaRecorder.ondataavailable = function (ev) {
+            if (ev.data.size) audioChunks.push(ev.data);
+          };
+          mediaRecorder.onstop = function () {
+            window.__lastAudioBlob = new Blob(audioChunks, { type: "audio/webm" });
+            recStat.textContent = "Voice ready to send.";
+            stream.getTracks().forEach(function (tr) { tr.stop(); });
+            renderAttachChips();
+          };
+          mediaRecorder.start();
+          recBtn.textContent = "Stop recording";
+          recStat.textContent = "Recording…";
+        } catch (e) {
+          errEl.textContent = "Microphone: " + (e.message || e);
+        }
+      } else {
+        mediaRecorder.stop();
+        recBtn.textContent = "Record voice";
+      }
+    });
+  </script>
+</body>
+</html>

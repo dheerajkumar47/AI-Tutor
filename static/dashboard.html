@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard — AI Tutor</title>
+  <link rel="stylesheet" href="/static/css/theme.css" />
+</head>
+<body>
+  <nav class="nav">
+    <a href="/" class="brand">AI <span>Tutor</span></a>
+    <div class="nav-links">
+      <a href="/dashboard">Dashboard</a>
+      <a href="/chat">AI Tutor</a>
+      <span class="user-email" id="who"></span>
+      <button type="button" class="link" id="logoutBtn">Log out</button>
+    </div>
+  </nav>
+  <div class="container-wide" style="padding-top:1.5rem;padding-bottom:2rem">
+    <h1 style="margin-top:0">Dashboard</h1>
+    <p class="status" id="welcome">Loading…</p>
+
+    <div id="statusPills" class="row" style="margin-top:1rem;flex-wrap:wrap"></div>
+
+    <div class="dash-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.25rem;margin-top:1.75rem">
+      <div class="card" style="max-width:none;margin:0">
+        <h3 style="margin-top:0">Start learning</h3>
+        <p class="status">Open the tutor to chat, upload study materials, use your voice, and get quizzes and explanations tailored to you.</p>
+        <a class="btn btn-primary" href="/chat" style="display:inline-block;margin-top:0.75rem">Open AI Tutor</a>
+      </div>
+      <div class="card" style="max-width:none;margin:0">
+        <h3 style="margin-top:0">What your tutor does</h3>
+        <ul class="status" style="margin:0;padding-left:1.2rem;line-height:1.65">
+          <li>Remembers past topics and notes from your sessions</li>
+          <li>Adapts when you share what you find difficult</li>
+          <li>Works with <strong>text</strong>, <strong>voice</strong>, and <strong>images</strong></li>
+          <li>Offers <strong>quizzes</strong>, <strong>summaries</strong>, and clear <strong>explanations</strong></li>
+          <li>Keeps answers focused so you get help quickly</li>
+        </ul>
+      </div>
+      <div class="card" style="max-width:none;margin:0">
+        <h3 style="margin-top:0">Setup (for whoever runs the server)</h3>
+        <p class="status" style="font-size:0.9rem">
+          The tutor needs an OpenAI API key in the server <code>.env</code> file. For logins that survive a server restart, set <code>JWT_SECRET</code> in <code>.env</code> as well.
+        </p>
+      </div>
+    </div>
+  </div>
+  <script src="/static/js/auth.js"></script>
+  <script>
+    if (!AITutorAuth.requireAuth()) {}
+    document.getElementById("logoutBtn").addEventListener("click", function () { AITutorAuth.logout(); });
+
+    function pill(text, ok) {
+      var s = document.createElement("span");
+      s.className = "attach-chip";
+      s.style.borderColor = ok ? "rgba(107,220,154,0.45)" : "rgba(255,122,122,0.45)";
+      s.textContent = text;
+      return s;
+    }
+
+    (async function () {
+      try {
+        var r = await fetch("/api/auth/me", { headers: AITutorAuth.authHeaders() });
+        if (r.status === 401) {
+          AITutorAuth.clear();
+          window.location.href = "/login";
+          return;
+        }
+        var u = await r.json();
+        document.getElementById("who").textContent = u.email || "";
+        document.getElementById("welcome").textContent = "Welcome back, " + (u.email || "learner") + ".";
+      } catch (e) {
+        document.getElementById("welcome").textContent = "Could not load your profile.";
+      }
+
+      var box = document.getElementById("statusPills");
+      try {
+        var h = await fetch("/api/health");
+        var j = await h.json();
+        if (j.openai_configured && j.openai_key_format_ok) {
+          box.appendChild(pill("Tutor is connected and ready", true));
+        } else {
+          box.appendChild(pill("Tutor needs an API key on the server", false));
+        }
+        if (!j.jwt_secret_configured) {
+          box.appendChild(pill("Tip: set JWT_SECRET so logins persist after restart", false));
+        } else {
+          box.appendChild(pill("Sign-in security configured", true));
+        }
+      } catch (e) {
+        box.appendChild(pill("Could not check tutor status", false));
+      }
+    })();
+  </script>
+</body>
+</html>

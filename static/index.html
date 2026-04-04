@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Tutor</title>
+  <link rel="stylesheet" href="/static/css/theme.css" />
+</head>
+<body>
+  <nav class="nav">
+    <a href="/" class="brand">AI <span>Tutor</span></a>
+    <div class="nav-links">
+      <a href="/login" id="navLogin">Log in</a>
+      <a href="/register" id="navReg">Sign up</a>
+      <a href="/dashboard" id="goDash" style="display:none">Dashboard</a>
+      <a href="/chat" id="goChat" style="display:none">AI Tutor</a>
+    </div>
+  </nav>
+  <div class="hero">
+    <h1>Your personal AI tutor</h1>
+    <p>
+      Learn with explanations, quizzes, and summaries—using text, voice, and images when you need them.
+      Your tutor remembers what you have covered and can focus on what you find hardest.
+    </p>
+    <div class="hero-actions" id="heroGuest">
+      <a class="btn btn-primary" href="/register">Create account</a>
+      <a class="btn" href="/login">Log in</a>
+    </div>
+    <div class="hero-actions" id="heroUser" style="display:none">
+      <a class="btn btn-primary" href="/dashboard">Dashboard</a>
+      <a class="btn" href="/chat">Open AI Tutor</a>
+    </div>
+  </div>
+  <div class="features">
+    <div class="feature"><strong>Remembers</strong> Past questions and notes carry forward so you do not start from zero every time.</div>
+    <div class="feature"><strong>Adapts</strong> Tell the tutor what feels difficult—it can adjust explanations and practice.</div>
+    <div class="feature"><strong>Multimodal</strong> Type, speak (voice notes), or share pictures of notes and diagrams.</div>
+    <div class="feature"><strong>Quizzes & summaries</strong> Check understanding with questions and get short takeaways from long material.</div>
+    <div class="feature"><strong>Focused help</strong> Answers aim to be clear and direct so you spend time learning, not waiting.</div>
+  </div>
+  <script src="/static/js/auth.js"></script>
+  <script>
+    if (AITutorAuth.getToken()) {
+      document.getElementById("goChat").style.display = "inline";
+      document.getElementById("goDash").style.display = "inline";
+      document.getElementById("navLogin").style.display = "none";
+      document.getElementById("navReg").style.display = "none";
+      document.getElementById("heroGuest").style.display = "none";
+      document.getElementById("heroUser").style.display = "flex";
+    }
+  </script>
+</body>
+</html>
