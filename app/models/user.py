@@ -17,8 +17,9 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    # Relationship to memory index
+    # Relationship to memory index and chat sessions
     index: Mapped["UserIndex"] = relationship("UserIndex", back_populates="user", uselist=False)
+    sessions: Mapped[list["ChatSession"]] = relationship("ChatSession", back_populates="user", cascade="all, delete-orphan")
 
 
 class UserIndex(Base):
@@ -31,3 +32,16 @@ class UserIndex(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user: Mapped["User"] = relationship("User", back_populates="index")
+
+
+class ChatSession(Base):
+    """Stores short-term conversation history for a user session."""
+    __tablename__ = "chat_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
+    session_id: Mapped[str] = mapped_column(String(255), index=True)
+    messages_json: Mapped[str] = mapped_column(text("TEXT"), nullable=False, default="[]")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user: Mapped["User"] = relationship("User", back_populates="sessions")

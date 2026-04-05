@@ -17,12 +17,12 @@ def fix_schema():
         except Exception as e:
             print(f"Error adding full_name: {e}")
 
-        # Ensure user_indices table exists
+        # Ensure all tables exist (users, user_indices, chat_sessions)
         try:
-            # We can use metadata.create_all as well, but let's just make sure this one column fix is done.
             from app.models.user import Base
+            # This will create all tables defined in models/user.py if they don't exist
             Base.metadata.create_all(bind=engine)
-            print("Verified all tables including 'user_indices' are created.")
+            print("Verified all tables (users, user_indices, chat_sessions) are created/updated.")
         except Exception as e:
             print(f"Error creating tables: {e}")
 
