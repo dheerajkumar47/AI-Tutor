@@ -23,18 +23,30 @@ class SessionHistory:
         self._load_from_db()
 
     def _load_from_db(self) -> None:
-        """Fetch messages from database on initialization."""
+        """Fetch messages from database on initialization, fallback to most recent for this user."""
         from app.database import SessionLocal
         from app.models.user import ChatSession
         
         db = SessionLocal()
         try:
-            from sqlalchemy import select
+            from sqlalchemy import select, desc
+            # 1. Try to load this specific session
             stmt = select(ChatSession).where(
                 ChatSession.user_id == self.user_id,
                 ChatSession.session_id == self.session_id
             )
             record = db.scalars(stmt).first()
+            
+            # 2. If no record for this session, fallback to the MOST RECENT session for this user
+            if not record:
+                stmt = select(ChatSession).where(
+                    ChatSession.user_id == self.user_id
+                ).order_by(desc(ChatSession.updated_at))
+                record = db.scalars(stmt).first()
+                if record:
+                    # Sync the session_id to match this history going forward
+                    self.session_id = record.session_id
+
             if record and record.messages_json:
                 data = json.loads(record.messages_json)
                 msgs = messages_from_dict(data)
