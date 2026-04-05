@@ -6,6 +6,7 @@
   <title>Tutor — AI Tutor</title>
   <link rel="stylesheet" href="/static/css/theme.css" />
   <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
   <nav class="nav">
@@ -132,7 +133,16 @@
       wrap.className = "msg " + (role === "user" ? "user" : "bot") + (extraClass ? " " + extraClass : "");
       wrap.innerHTML =
         '<div class="label">' + (role === "user" ? "You" : "Tutor") + '</div><div class="body"></div>';
-      wrap.querySelector(".body").innerHTML = html;
+      
+      // If it's a bot message and not streaming yet, parse it with marked
+      // Note: role "user" usually passes pre-formatted HTML from sendMessage
+      var body = wrap.querySelector(".body");
+      if (role === "bot" && !extraClass?.includes("streaming")) {
+          body.innerHTML = marked.parse(html);
+      } else {
+          body.innerHTML = html;
+      }
+      
       logEl.appendChild(wrap);
       logEl.scrollTop = logEl.scrollHeight;
       return wrap;
@@ -337,7 +347,7 @@
           sessionId = out.session_id || sessionId;
           localStorage.setItem("ai_tutor_session", sessionId);
           streamingWrap.classList.remove("streaming");
-          streamingWrap.querySelector(".body").innerHTML = escapeHtml(out.reply || "").replace(/\n/g, "<br/>");
+          streamingWrap.querySelector(".body").innerHTML = marked.parse(out.reply || "");
           await renderMermaidAfterReply(logEl, out.reply || "");
         } else {
           var res2 = await fetch("/api/chat", { method: "POST", headers: headers, body: fd });
@@ -352,7 +362,7 @@
           sessionId = data.session_id || sessionId;
           localStorage.setItem("ai_tutor_session", sessionId);
           var reply = data.reply || "";
-          pushMsg("bot", escapeHtml(reply).replace(/\n/g, "<br/>"));
+          pushMsg("bot", reply);
           await renderMermaidAfterReply(logEl, reply);
         }
 
