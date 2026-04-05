@@ -34,6 +34,12 @@ def _prepare_db_url(url: str) -> str:
     if "supabase.co" in url and ":5432" in url:
         url = url.replace(":5432", ":6543")
         
+    # Remove 'pgbouncer=true' if present, as it causes 'invalid dsn' in psycopg2
+    if "pgbouncer=true" in url:
+        url = url.replace("pgbouncer=true", "")
+        # Clean up hanging '?' or '&'
+        url = url.replace("?&", "?").replace("&&", "&").rstrip("?").rstrip("&")
+        
     # Ensure SSL for Supabase
     if "supabase" in url and "sslmode" not in url:
         sep = "&" if "?" in url else "?"
