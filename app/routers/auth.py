@@ -22,7 +22,11 @@ def register(
     db: Session = Depends(get_db),
 ) -> TokenResponse:
     enforce_register_rate(request)
-    row = User(email=user.email.lower().strip(), hashed_password=hash_password(user.password))
+    row = User(
+        email=user.email.lower().strip(),
+        full_name=user.full_name,
+        hashed_password=hash_password(user.password)
+    )
     db.add(row)
     try:
         db.commit()

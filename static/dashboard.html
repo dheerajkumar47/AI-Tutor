@@ -12,8 +12,21 @@
     <div class="nav-links">
       <a href="/dashboard">Dashboard</a>
       <a href="/chat">AI Tutor</a>
-      <span class="user-email" id="who"></span>
-      <button type="button" class="link" id="logoutBtn">Log out</button>
+      <div class="user-profile">
+        <div class="avatar-circle" id="avatarIcon">?</div>
+        <div class="profile-dropdown" id="profileDropdown">
+          <div style="padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); margin-bottom: 0.5rem;">
+            <div id="userName" style="font-weight: 700; font-size: 0.9rem; color: var(--text);">User</div>
+            <div id="userEmail" style="font-size: 0.75rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis;">email@example.com</div>
+          </div>
+          <a href="/chat" class="dropdown-item">Open AI Tutor</a>
+          <button type="button" class="dropdown-item" id="logoutBtn">Log out</button>
+          <div class="theme-toggle">
+            <span>Theme</span>
+            <button type="button" class="btn btn-sm" id="themeSwitch">Toggle</button>
+          </div>
+        </div>
+      </div>
     </div>
   </nav>
   <div class="container-wide" style="padding-top:1.5rem;padding-bottom:2rem">
@@ -48,7 +61,24 @@
   </div>
   <script src="/static/js/auth.js"></script>
   <script>
+    AITutorAuth.applyTheme();
     if (!AITutorAuth.requireAuth()) {}
+
+    // Dropdown toggle
+    document.getElementById("avatarIcon").addEventListener("click", function(e) {
+      e.stopPropagation();
+      document.getElementById("profileDropdown").classList.toggle("show");
+    });
+    window.addEventListener("click", function() {
+      document.getElementById("profileDropdown").classList.remove("show");
+    });
+
+    // Theme toggle
+    document.getElementById("themeSwitch").addEventListener("click", function() {
+      const cur = AITutorAuth.getTheme();
+      AITutorAuth.setTheme(cur === 'dark' ? 'light' : 'dark');
+    });
+
     document.getElementById("logoutBtn").addEventListener("click", function () { AITutorAuth.logout(); });
 
     function pill(text, ok) {
@@ -68,8 +98,11 @@
           return;
         }
         var u = await r.json();
-        document.getElementById("who").textContent = u.email || "";
-        document.getElementById("welcome").textContent = "Welcome back, " + (u.email || "learner") + ".";
+        const initials = AITutorAuth.getInitials(u.full_name, u.email);
+        document.getElementById("avatarIcon").textContent = initials;
+        document.getElementById("userName").textContent = u.full_name || "User";
+        document.getElementById("userEmail").textContent = u.email || "";
+        document.getElementById("welcome").textContent = "Welcome back, " + (u.full_name || u.email || "learner") + ".";
       } catch (e) {
         document.getElementById("welcome").textContent = "Could not load your profile.";
       }

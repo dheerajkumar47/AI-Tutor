@@ -13,9 +13,27 @@
     <div class="nav-links">
       <a href="/dashboard">Dashboard</a>
       <a href="/">Home</a>
-      <span class="user-email" id="who"></span>
-      <button type="button" class="link" id="newSess">New session</button>
-      <button type="button" class="link" id="logoutBtn">Log out</button>
+      <div class="user-profile">
+        <div class="avatar-circle" id="avatarIcon">?</div>
+        <div class="profile-dropdown" id="profileDropdown">
+          <div style="padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); margin-bottom: 0.5rem;">
+            <div id="userName" style="font-weight: 700; font-size: 0.9rem; color: var(--text);">User</div>
+            <div id="userEmail" style="font-size: 0.75rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis;">email@example.com</div>
+          </div>
+          <a href="/dashboard" class="dropdown-item">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            Dashboard
+          </a>
+          <button type="button" class="dropdown-item" id="logoutBtn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            Log out
+          </button>
+          <div class="theme-toggle">
+            <span>Theme</span>
+            <button type="button" class="btn btn-sm" id="themeSwitch" style="padding: 2px 8px; font-size: 0.7rem;">Toggle</button>
+          </div>
+        </div>
+      </div>
     </div>
   </nav>
   <div id="setupBanner" class="banner-warn" role="status"></div>
@@ -43,19 +61,29 @@
   </div>
   <script src="/static/js/auth.js"></script>
   <script>
+    AITutorAuth.applyTheme();
     mermaid.initialize({ startOnLoad: false, theme: "neutral" });
     if (!AITutorAuth.requireAuth()) {}
 
     var USE_STREAM = true;
 
+    // Dropdown toggle
+    document.getElementById("avatarIcon").addEventListener("click", function(e) {
+      e.stopPropagation();
+      document.getElementById("profileDropdown").classList.toggle("show");
+    });
+    window.addEventListener("click", function() {
+      document.getElementById("profileDropdown").classList.remove("show");
+    });
+
+    // Theme toggle
+    document.getElementById("themeSwitch").addEventListener("click", function() {
+      const cur = AITutorAuth.getTheme();
+      AITutorAuth.setTheme(cur === 'dark' ? 'light' : 'dark');
+    });
+
     document.getElementById("logoutBtn").addEventListener("click", function () {
       AITutorAuth.logout();
-    });
-    document.getElementById("newSess").addEventListener("click", function () {
-      AITutorAuth.resetSession();
-      sessionId = AITutorAuth.sessionId();
-      document.getElementById("log").innerHTML = "";
-      document.getElementById("sessHint").textContent = "Started a fresh session.";
     });
 
     (async function loadMe() {
@@ -67,7 +95,10 @@
           return;
         }
         var u = await r.json();
-        document.getElementById("who").textContent = u.email || "";
+        const initials = AITutorAuth.getInitials(u.full_name, u.email);
+        document.getElementById("avatarIcon").textContent = initials;
+        document.getElementById("userName").textContent = u.full_name || "User";
+        document.getElementById("userEmail").textContent = u.email || "";
       } catch (e) {}
     })();
 

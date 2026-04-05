@@ -13,7 +13,23 @@
       <a href="/login" id="navLogin">Log in</a>
       <a href="/register" id="navReg">Sign up</a>
       <a href="/dashboard" id="goDash" style="display:none">Dashboard</a>
-      <a href="/chat" id="goChat" style="display:none">AI Tutor</a>
+      <a href="/chat" id="goChat" style="display:none">Open Tutor</a>
+      <div class="user-profile" id="userProf" style="display:none">
+        <div class="avatar-circle" id="avatarIcon">?</div>
+        <!-- Same dropdown for consistency -->
+        <div class="profile-dropdown" id="profileDropdown">
+          <div style="padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); margin-bottom: 0.5rem;">
+            <div id="userName" style="font-weight: 700; font-size: 0.9rem; color: var(--text);">User</div>
+            <div id="userEmail" style="font-size: 0.75rem; color: var(--muted);">email@example.com</div>
+          </div>
+          <a href="/dashboard" class="dropdown-item">Dashboard</a>
+          <button type="button" class="dropdown-item" id="logoutBtn">Log out</button>
+          <div class="theme-toggle">
+            <span>Theme</span>
+            <button type="button" class="btn btn-sm" id="themeSwitch">Toggle</button>
+          </div>
+        </div>
+      </div>
     </div>
   </nav>
   <div class="hero">
@@ -40,14 +56,46 @@
   </div>
   <script src="/static/js/auth.js"></script>
   <script>
+    AITutorAuth.applyTheme();
+
     if (AITutorAuth.getToken()) {
-      document.getElementById("goChat").style.display = "inline";
-      document.getElementById("goDash").style.display = "inline";
       document.getElementById("navLogin").style.display = "none";
       document.getElementById("navReg").style.display = "none";
       document.getElementById("heroGuest").style.display = "none";
       document.getElementById("heroUser").style.display = "flex";
+      document.getElementById("userProf").style.display = "flex";
+
+      // Dropdown toggle
+      document.getElementById("avatarIcon").addEventListener("click", function(e) {
+        e.stopPropagation();
+        document.getElementById("profileDropdown").classList.toggle("show");
+      });
+      window.addEventListener("click", function() {
+        document.getElementById("profileDropdown").classList.remove("show");
+      });
+
+      // Status
+      (async function showMe() {
+        try {
+          var r = await fetch("/api/auth/me", { headers: AITutorAuth.authHeaders() });
+          if(r.ok) {
+            var u = await r.json();
+            document.getElementById("avatarIcon").textContent = AITutorAuth.getInitials(u.full_name, u.email);
+            document.getElementById("userName").textContent = u.full_name || "User";
+            document.getElementById("userEmail").textContent = u.email || "";
+          }
+        } catch(e){}
+      })();
     }
+
+    document.getElementById("logoutBtn").addEventListener("click", function() {
+      AITutorAuth.logout();
+    });
+    
+    document.getElementById("themeSwitch").addEventListener("click", function() {
+      const cur = AITutorAuth.getTheme();
+      AITutorAuth.setTheme(cur === 'dark' ? 'light' : 'dark');
+    });
   </script>
 </body>
 </html>

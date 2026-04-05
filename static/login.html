@@ -16,22 +16,38 @@
   </nav>
   <div class="container" style="padding-top:2rem">
     <div class="card">
-      <h2>Log in</h2>
+      <h2 style="font-size: 1.5rem; font-weight: 800; margin-bottom: 0.5rem;">Welcome back</h2>
+      <p style="color: var(--muted); font-size: 0.88rem; margin-bottom: 1.5rem;">Log in to your account to continue your learning.</p>
+      
       <form id="form">
-        <label for="email">Email</label>
-        <input id="email" type="email" autocomplete="username" required />
-        <label for="password">Password</label>
-        <input id="password" type="password" autocomplete="current-password" required />
+        <div class="input-field-wrap">
+          <label for="email">Email</label>
+          <input id="email" type="email" autocomplete="username" placeholder="name@company.com" required />
+        </div>
+
+        <div class="input-field-wrap">
+          <label for="password">Password</label>
+          <input id="password" type="password" autocomplete="current-password" placeholder="••••••••" required />
+          <button type="button" class="eye-toggle" onclick="togglePass()">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+
         <div id="err" class="form-error" style="display:none"></div>
-        <button type="submit" class="btn btn-primary" style="width:100%">Continue</button>
+        <button type="submit" class="btn btn-primary animate-glide" style="width:100%; margin-top: 0.5rem;">Continue</button>
       </form>
-      <p class="status" style="margin-top:1rem;text-align:center">
+      <p class="status" style="margin-top:1.5rem; text-align:center">
         No account? <a href="/register">Sign up</a>
       </p>
     </div>
   </div>
   <script src="/static/js/auth.js"></script>
   <script>
+    function togglePass() {
+      const el = document.getElementById('password');
+      el.type = el.type === 'password' ? 'text' : 'password';
+    }
+
     if (AITutorAuth.getToken()) window.location.href = "/dashboard";
     document.getElementById("form").addEventListener("submit", async function (e) {
       e.preventDefault();

@@ -5,6 +5,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 class UserCreate(BaseModel):
     email: EmailStr
+    full_name: str | None = Field(None, max_length=128)
     password: str = Field(min_length=8, max_length=128)
 
 
@@ -21,5 +22,6 @@ class TokenResponse(BaseModel):
 class UserPublic(BaseModel):
     id: int
     email: str
+    full_name: str | None = None
 
     model_config = {"from_attributes": True}

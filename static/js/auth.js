@@ -38,6 +38,28 @@
       this.clear();
       window.location.href = "/";
     },
+    
+    // Theme Management
+    getTheme: function() {
+      return localStorage.getItem('theme') || 'dark';
+    },
+    setTheme: function(t) {
+      localStorage.setItem('theme', t);
+      this.applyTheme();
+    },
+    applyTheme: function() {
+      const t = this.getTheme();
+      document.documentElement.setAttribute('data-theme', t);
+    },
+
+    // Profile Helpers
+    getInitials: function(name, email) {
+      if (name && name.trim()) {
+        return name.trim().split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+      }
+      return (email || '?')[0].toUpperCase();
+    },
+
     /** FastAPI: detail may be a string, or Pydantic 422 array of {loc,msg}, or {msg}. */
     formatApiError: function (data, statusText) {
       if (!data) return statusText || "Request failed";
