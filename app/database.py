@@ -5,16 +5,37 @@ from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 from app.config import DATABASE_URL
 
+import urllib.parse
+
 def _prepare_db_url(url: str) -> str:
     """Ensure the database URL is handled correctly for SQLAlchemy."""
+    if not url or "sqlite" in url:
+        return url
+        
     if url.startswith("postgres://"):
-        # Handle Render's old 'postgres' scheme prefix by converting to 'postgresql'
         url = url.replace("postgres://", "postgresql://", 1)
     
-    # We don't manually encode here because SQLAlchemy's create_engine 
-    # generally expects a pre-formatted string. 
-    # But if there's no sslmode and it's not a local sqlite, we add it for convenience.
-    if "sqlite" not in url and "sslmode" not in url:
+    # Extract password to encode special characters like '+'
+    # Format: postgresql://user[:password]@host[:port]/dbname
+    if "@" in url and "://" in url:
+        prefix, rest = url.split("@", 1)
+        scheme_and_info = prefix.split("://", 1)
+        if len(scheme_and_info) > 1:
+            scheme, auth = scheme_and_info
+            if ":" in auth:
+                user, password = auth.split(":", 1)
+                # Only encode if it hasn't been encoded yet
+                if "+" in password:
+                    password = urllib.parse.quote_plus(password)
+                url = f"{scheme}://{user}:{password}@{rest}"
+    
+    # Supabase Direct (5432) is often blocked on hosting providers.
+    # Switch to Transaction Pooler (6543) if host matches and port is 5432.
+    if "supabase.co" in url and ":5432" in url:
+        url = url.replace(":5432", ":6543")
+        
+    # Ensure SSL for Supabase
+    if "supabase" in url and "sslmode" not in url:
         sep = "&" if "?" in url else "?"
         url += f"{sep}sslmode=require"
         

@@ -16,7 +16,19 @@ DATA_DIR = BASE_DIR / "data"
 FAISS_USERS_DIR = DATA_DIR / "faiss_users"
 FAISS_DIR = DATA_DIR / "tutor_faiss"
 
-DATABASE_URL = os.getenv("DATABASE_URL") or f"sqlite:///{(DATA_DIR / 'tutor.db').as_posix()}"
+def _clean_db_url(url: str | None) -> str:
+    if not url:
+        return f"sqlite:///{(DATA_DIR / 'tutor.db').as_posix()}"
+    
+    url = url.strip().strip("'").strip('"')
+    
+    # Remove accidental prefix if user pasted "DATABASE_URL=..."
+    if url.startswith("DATABASE_URL="):
+        url = url.replace("DATABASE_URL=", "", 1).strip().strip("'").strip('"')
+        
+    return url
+
+DATABASE_URL = _clean_db_url(os.getenv("DATABASE_URL"))
 
 OPENAI_API_KEY = (os.getenv("OPENAI_API_KEY") or "").strip()
 TUTOR_MODEL = (os.getenv("TUTOR_MODEL") or "gpt-4o-mini").strip()
