@@ -34,7 +34,14 @@ async def lifespan(app: FastAPI):
     ensure_data_dirs()
     get_jwt_secret()
     import app.models.user  # noqa: F401 — register models
-    Base.metadata.create_all(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database tables verified.")
+    except Exception as e:
+        logger.error(f"DATABASE CONNECTION FAILED: {str(e)}")
+        logger.error("Check your DATABASE_URL in Render's environment settings.")
+        # We don't raise here so the app might still serve static files/health,
+        # but most functional endpoints will fail.
     log_openai_config_status()
     yield
 
