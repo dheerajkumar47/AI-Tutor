@@ -26,6 +26,12 @@ class LongTermMemoryStore:
 
     def _load_or_create(self) -> None:
         self._dir.mkdir(parents=True, exist_ok=True)
+        
+        # 1. Try to load from database first (for persistence on Render)
+        if self._load_from_db():
+            return
+            
+        # 2. Try to load from local disk (if it exists from this session)
         if (self._dir / "index.faiss").exists():
             self._store = FAISS.load_local(
                 str(self._dir),
@@ -33,6 +39,7 @@ class LongTermMemoryStore:
                 allow_dangerous_deserialization=True,
             )
         else:
+            # 3. Create fresh if nothing found
             seed = Document(
                 page_content="Tutor memory initialized. No interactions stored yet.",
                 metadata={"type": "system", "id": str(uuid.uuid4()), "user_id": self.user_id},
@@ -40,11 +47,71 @@ class LongTermMemoryStore:
             self._store = FAISS.from_documents([seed], self._embeddings)
             self._persist()
 
+    def _load_from_db(self) -> bool:
+        """Fetch index from database if it exists."""
+        from app.database import SessionLocal
+        from app.models.user import UserIndex
+        
+        db = SessionLocal()
+        try:
+            record = db.get(UserIndex, self.user_id)
+            if record:
+                # Write to disk so LangChain can load it
+                (self._dir / "index.faiss").write_bytes(record.index_data)
+                (self._dir / "index.pkl").write_bytes(record.pkl_data)
+                self._store = FAISS.load_local(
+                    str(self._dir),
+                    self._embeddings,
+                    allow_dangerous_deserialization=True,
+                )
+                return True
+        except Exception:
+            pass
+        finally:
+            db.close()
+        return False
+
     def _persist(self) -> None:
         if self._store is None:
             return
         self._dir.mkdir(parents=True, exist_ok=True)
+        # Save locally first
         self._store.save_local(str(self._dir))
+        # Sync to DB
+        self._save_to_db()
+
+    def _save_to_db(self) -> None:
+        """Upload index files to database for long-term persistence."""
+        from app.database import SessionLocal
+        from app.models.user import UserIndex
+        
+        index_path = self._dir / "index.faiss"
+        pkl_path = self._dir / "index.pkl"
+        
+        if not index_path.exists() or not pkl_path.exists():
+            return
+            
+        db = SessionLocal()
+        try:
+            index_bytes = index_path.read_bytes()
+            pkl_bytes = pkl_path.read_bytes()
+            
+            record = db.get(UserIndex, self.user_id)
+            if record:
+                record.index_data = index_bytes
+                record.pkl_data = pkl_bytes
+            else:
+                record = UserIndex(
+                    user_id=self.user_id,
+                    index_data=index_bytes,
+                    pkl_data=pkl_bytes
+                )
+                db.add(record)
+            db.commit()
+        except Exception:
+            db.rollback()
+        finally:
+            db.close()
 
     def add_text(self, text: str, metadata: dict[str, Any] | None = None) -> str:
         mid = str(uuid.uuid4())
